@@ -3,6 +3,8 @@ package com.cosmeticssafety.service.impl;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +18,8 @@ import com.cosmeticssafety.service.IngredientService;
 @Service
 public class IngredientServiceImpl implements IngredientService {
 
+	private static final Logger LOGGER = LoggerFactory.getLogger(IngredientServiceImpl.class);
+
 	private final IngredientRepository ingredientRepository;
 
 	public IngredientServiceImpl(IngredientRepository ingredientRepository) {
@@ -26,11 +30,14 @@ public class IngredientServiceImpl implements IngredientService {
 	@Transactional
 	public IngredientResponse createIngredient(IngredientRequest request) {
 		ingredientRepository.findByNameIgnoreCase(request.getName()).ifPresent(existing -> {
+			LOGGER.warn("Ingredient creation blocked because name already exists: {}", request.getName());
 			throw new IllegalArgumentException("Ingredient already exists with name: " + request.getName());
 		});
 		Ingredient ingredient = new Ingredient();
 		applyIngredientValues(ingredient, request);
-		return mapToResponse(ingredientRepository.save(ingredient));
+		Ingredient savedIngredient = ingredientRepository.saveAndFlush(ingredient);
+		LOGGER.info("Created ingredient with id={} and name={}", savedIngredient.getId(), savedIngredient.getName());
+		return mapToResponse(savedIngredient);
 	}
 
 	@Override
@@ -39,7 +46,9 @@ public class IngredientServiceImpl implements IngredientService {
 		Ingredient ingredient = ingredientRepository.findById(ingredientId)
 				.orElseThrow(() -> new ResourceNotFoundException("Ingredient not found with id: " + ingredientId));
 		applyIngredientValues(ingredient, request);
-		return mapToResponse(ingredientRepository.save(ingredient));
+		Ingredient savedIngredient = ingredientRepository.saveAndFlush(ingredient);
+		LOGGER.info("Updated ingredient with id={}", savedIngredient.getId());
+		return mapToResponse(savedIngredient);
 	}
 
 	@Override

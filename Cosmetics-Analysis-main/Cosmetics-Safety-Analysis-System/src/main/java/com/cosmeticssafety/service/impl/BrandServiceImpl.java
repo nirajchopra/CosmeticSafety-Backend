@@ -3,6 +3,8 @@ package com.cosmeticssafety.service.impl;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +18,8 @@ import com.cosmeticssafety.service.BrandService;
 @Service
 public class BrandServiceImpl implements BrandService {
 
+	private static final Logger LOGGER = LoggerFactory.getLogger(BrandServiceImpl.class);
+
 	private final BrandRepository brandRepository;
 
 	public BrandServiceImpl(BrandRepository brandRepository) {
@@ -26,11 +30,14 @@ public class BrandServiceImpl implements BrandService {
 	@Transactional
 	public BrandResponse createBrand(BrandRequest request) {
 		brandRepository.findByNameIgnoreCase(request.getName()).ifPresent(existing -> {
+			LOGGER.warn("Brand creation blocked because name already exists: {}", request.getName());
 			throw new IllegalArgumentException("Brand already exists with name: " + request.getName());
 		});
 		Brand brand = new Brand();
 		applyBrandValues(brand, request);
-		return mapToResponse(brandRepository.save(brand));
+		Brand savedBrand = brandRepository.saveAndFlush(brand);
+		LOGGER.info("Created brand with id={} and name={}", savedBrand.getId(), savedBrand.getName());
+		return mapToResponse(savedBrand);
 	}
 
 	@Override
@@ -39,7 +46,9 @@ public class BrandServiceImpl implements BrandService {
 		Brand brand = brandRepository.findById(brandId)
 				.orElseThrow(() -> new ResourceNotFoundException("Brand not found with id: " + brandId));
 		applyBrandValues(brand, request);
-		return mapToResponse(brandRepository.save(brand));
+		Brand savedBrand = brandRepository.saveAndFlush(brand);
+		LOGGER.info("Updated brand with id={}", savedBrand.getId());
+		return mapToResponse(savedBrand);
 	}
 
 	@Override

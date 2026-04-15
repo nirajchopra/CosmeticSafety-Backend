@@ -8,6 +8,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -24,6 +25,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 	public JwtAuthenticationFilter(JwtService jwtService, CustomUserDetailsService userDetailsService) {
 		this.jwtService = jwtService;
 		this.userDetailsService = userDetailsService;
+	}
+
+	@Override
+	protected boolean shouldNotFilter(HttpServletRequest request) {
+		return HttpMethod.OPTIONS.matches(request.getMethod())
+				|| isPublicPath(request.getServletPath())
+				|| isPublicPath(request.getRequestURI());
 	}
 
 	@Override
@@ -55,5 +63,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		}
 
 		filterChain.doFilter(request, response);
+	}
+
+	private boolean isPublicPath(String path) {
+		if (path == null || path.isEmpty()) {
+			return false;
+		}
+
+		return path.startsWith("/v1/auth")
+				|| path.startsWith("/api/v1/auth")
+				|| "/v1/health".equals(path)
+				|| "/api/v1/health".equals(path)
+				|| path.startsWith("/actuator/")
+				|| path.startsWith("/error");
 	}
 }

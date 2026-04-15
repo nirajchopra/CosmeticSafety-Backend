@@ -6,11 +6,12 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +39,8 @@ import com.cosmeticssafety.common.enums.RoleType;
 @Service
 public class AuthServiceImpl implements AuthService {
 
+	private static final Logger LOGGER = LoggerFactory.getLogger(AuthServiceImpl.class);
+
 	private final AuthenticationManager authenticationManager;
 	private final JwtService jwtService;
 	private final UserRepository userRepository;
@@ -59,31 +62,37 @@ public class AuthServiceImpl implements AuthService {
 	@Override
 	@Transactional
 	public AuthResponse register(RegisterRequest request) {
-		if (userRepository.existsByEmailIgnoreCase(request.getEmail())) {
-			throw new IllegalArgumentException("User already exists with email: " + request.getEmail());
+		String normalizedEmail = normalizeEmail(request.getEmail());
+		if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
+			LOGGER.warn("Registration blocked because email already exists: {}", normalizedEmail);
+			throw new IllegalArgumentException("User already exists with email: " + normalizedEmail);
 		}
 
 		Role consumerRole = roleRepository.findByName(RoleType.CONSUMER)
 				.orElseThrow(() -> new ResourceNotFoundException("Default CONSUMER role not found"));
 
 		User user = new User();
-		user.setFullName(request.getFullName());
-		user.setEmail(request.getEmail());
+		user.setFullName(request.getFullName().trim());
+		user.setEmail(normalizedEmail);
 		user.setPassword(passwordEncoder.encode(request.getPassword()));
 		user.getRoles().add(consumerRole);
 
-		User savedUser = userRepository.save(user);
+		User savedUser = userRepository.saveAndFlush(user);
+		LOGGER.info("Registered new user with email={} and id={}", savedUser.getEmail(), savedUser.getId());
 		return buildAuthResponse(new ApplicationUserDetails(savedUser));
 	}
 
 	@Override
 	public AuthResponse login(AuthRequest request) {
+		String normalizedEmail = normalizeEmail(request.getEmail());
 		try {
 			Authentication authentication = authenticationManager.authenticate(
-					new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
+					new UsernamePasswordAuthenticationToken(normalizedEmail, request.getPassword()));
 			ApplicationUserDetails userDetails = (ApplicationUserDetails) authentication.getPrincipal();
+			LOGGER.info("Login successful for email={}", normalizedEmail);
 			return buildAuthResponse(userDetails);
 		} catch (BadCredentialsException exception) {
+			LOGGER.warn("Login failed for email={}", normalizedEmail);
 			throw new BadCredentialsException("Invalid email or password");
 		}
 	}
@@ -91,8 +100,9 @@ public class AuthServiceImpl implements AuthService {
 	@Override
 	@Transactional
 	public MessageResponse forgotPassword(ForgotPasswordRequest request) {
-		User user = userRepository.findByEmailIgnoreCase(request.getEmail())
-				.orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + request.getEmail()));
+		String normalizedEmail = normalizeEmail(request.getEmail());
+		User user = userRepository.findByEmailIgnoreCase(normalizedEmail)
+				.orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + normalizedEmail));
 
 		passwordResetTokenRepository.deleteByUser(user);
 
@@ -102,6 +112,7 @@ public class AuthServiceImpl implements AuthService {
 		resetToken.setUser(user);
 		resetToken.setExpiryDate(LocalDateTime.now().plusMinutes(30));
 		passwordResetTokenRepository.save(resetToken);
+		LOGGER.info("Generated password reset token for email={}", normalizedEmail);
 
 		// For now token is returned for development/testing until email integration is wired.
 		return new MessageResponse("Password reset token generated successfully", token);
@@ -119,10 +130,11 @@ public class AuthServiceImpl implements AuthService {
 
 		User user = resetToken.getUser();
 		user.setPassword(passwordEncoder.encode(request.getNewPassword()));
-		userRepository.save(user);
+		userRepository.saveAndFlush(user);
 
 		resetToken.setUsed(true);
 		passwordResetTokenRepository.save(resetToken);
+		LOGGER.info("Password reset completed for email={}", user.getEmail());
 
 		return new MessageResponse("Password reset successfully");
 	}
@@ -130,13 +142,15 @@ public class AuthServiceImpl implements AuthService {
 	@Override
 	@Transactional
 	public MessageResponse changePassword(String email, ChangePasswordRequest request) {
-		User user = userRepository.findByEmailIgnoreCase(email)
-				.orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+		String normalizedEmail = normalizeEmail(email);
+		User user = userRepository.findByEmailIgnoreCase(normalizedEmail)
+				.orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + normalizedEmail));
 		if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
 			throw new BadCredentialsException("Current password is incorrect");
 		}
 		user.setPassword(passwordEncoder.encode(request.getNewPassword()));
-		userRepository.save(user);
+		userRepository.saveAndFlush(user);
+		LOGGER.info("Password changed for email={}", normalizedEmail);
 		return new MessageResponse("Password changed successfully");
 	}
 
@@ -160,5 +174,9 @@ public class AuthServiceImpl implements AuthService {
 		response.setEmail(user.getEmail());
 		response.setRoles(roles);
 		return response;
+	}
+
+	private String normalizeEmail(String email) {
+		return email == null ? null : email.trim().toLowerCase();
 	}
 }

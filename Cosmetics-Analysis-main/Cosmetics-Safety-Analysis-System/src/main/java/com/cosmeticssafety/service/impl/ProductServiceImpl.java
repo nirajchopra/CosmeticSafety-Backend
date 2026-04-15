@@ -3,6 +3,8 @@ package com.cosmeticssafety.service.impl;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +20,8 @@ import com.cosmeticssafety.service.ProductService;
 @Service
 public class ProductServiceImpl implements ProductService {
 
+	private static final Logger LOGGER = LoggerFactory.getLogger(ProductServiceImpl.class);
+
 	private final ProductRepository productRepository;
 	private final BrandRepository brandRepository;
 
@@ -31,7 +35,9 @@ public class ProductServiceImpl implements ProductService {
 	public ProductResponse createProduct(ProductRequest request) {
 		Product product = new Product();
 		applyProductValues(product, request);
-		return mapToResponse(productRepository.save(product));
+		Product savedProduct = productRepository.saveAndFlush(product);
+		LOGGER.info("Created product with id={} and name={}", savedProduct.getId(), savedProduct.getName());
+		return mapToResponse(savedProduct);
 	}
 
 	@Override
@@ -40,7 +46,9 @@ public class ProductServiceImpl implements ProductService {
 		Product product = productRepository.findById(productId)
 				.orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
 		applyProductValues(product, request);
-		return mapToResponse(productRepository.save(product));
+		Product savedProduct = productRepository.saveAndFlush(product);
+		LOGGER.info("Updated product with id={}", savedProduct.getId());
+		return mapToResponse(savedProduct);
 	}
 
 	@Override

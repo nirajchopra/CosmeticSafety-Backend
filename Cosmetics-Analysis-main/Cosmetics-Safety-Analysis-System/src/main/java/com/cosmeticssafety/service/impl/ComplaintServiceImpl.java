@@ -3,6 +3,8 @@ package com.cosmeticssafety.service.impl;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +20,8 @@ import com.cosmeticssafety.service.ComplaintService;
 
 @Service
 public class ComplaintServiceImpl implements ComplaintService {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(ComplaintServiceImpl.class);
 
 	private final ComplaintRepository complaintRepository;
 	private final UserRepository userRepository;
@@ -39,7 +43,9 @@ public class ComplaintServiceImpl implements ComplaintService {
 		complaint.setDescription(request.getDescription());
 		complaint.setSubmittedBy(user);
 
-		return mapToResponse(complaintRepository.save(complaint));
+		Complaint savedComplaint = complaintRepository.saveAndFlush(complaint);
+		LOGGER.info("Created complaint with id={} for email={}", savedComplaint.getId(), userEmail);
+		return mapToResponse(savedComplaint);
 	}
 
 	@Override
@@ -67,7 +73,9 @@ public class ComplaintServiceImpl implements ComplaintService {
 
 		complaint.setStatus(request.getStatus());
 		complaint.setResolutionRemarks(request.getResolutionRemarks());
-		return mapToResponse(complaintRepository.save(complaint));
+		Complaint savedComplaint = complaintRepository.saveAndFlush(complaint);
+		LOGGER.info("Updated complaint status for id={} to {}", savedComplaint.getId(), savedComplaint.getStatus());
+		return mapToResponse(savedComplaint);
 	}
 
 	private User getUserByEmail(String email) {

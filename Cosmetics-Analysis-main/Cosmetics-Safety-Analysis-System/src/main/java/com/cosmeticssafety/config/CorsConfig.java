@@ -17,17 +17,18 @@ public class CorsConfig {
 	@Value("${application.cors.allowed-origins}")
 	private String allowedOrigins;
 
-		@Bean
-		public CorsConfigurationSource corsConfigurationSource() {
-			CorsConfiguration configuration = new CorsConfiguration();
-			List<String> origins = Arrays.stream(allowedOrigins.split(","))
-					.map(String::trim)
-					.filter(value -> !value.isEmpty())
-					.collect(Collectors.toList());
+	@Bean
+	public CorsConfigurationSource corsConfigurationSource() {
+		CorsConfiguration configuration = new CorsConfiguration();
+		List<String> origins = Arrays.stream(allowedOrigins.split(","))
+				.map(String::trim)
+				.filter(value -> !value.isEmpty())
+				.collect(Collectors.toList());
 
 		configuration.setAllowedOrigins(origins);
 		configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-		configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Accept", "Origin"));
+		configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Accept", "Origin",
+				"X-Requested-With"));
 		configuration.setExposedHeaders(Arrays.asList("Authorization"));
 		configuration.setAllowCredentials(true);
 		configuration.setMaxAge(3600L);
